@@ -2,59 +2,43 @@
 - name: Install and Configure Nginx
   hosts: all
   become: yes
-  gather_facts: no
+  pre_tasks:
+    - name: Set SSH user for Ubuntu systems
+      set_fact:
+        ansible_user: ubuntu
+      when: ansible_os_family == "Debian"
 
+    - name: Set SSH user for RedHat systems
+      set_fact:
+        ansible_user: ec2-user
+      when: ansible_os_family == "RedHat"
+  
   tasks:
-    - name: "Task 1: Update system and install Python 3.10"
-      ansible.builtin.raw: |
-        set -e
-        apt-get update -qq
-        apt-get install -y -qq python3.10 python3.10-distutils python3-apt
-        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
-      args:
-        executable: /bin/bash
-
-    - name: "Task 2: Gather facts"
-      ansible.builtin.setup:
-
-    - name: "Task 3: Install Nginx"
-      ansible.builtin.apt:
+    - name: Install Nginx
+      ansible.builtin.yum:
         name: nginx
         state: present
-        update_cache: yes
+      when: ansible_os_family == "RedHat"
+      
+    - name: install nginx
+      apt: name=nginx state=latest
+      when: ansible_os_family == "Debian"
 
-    - name: "Task 4: Create Nginx index.html"
+    - name: Create index.html
       ansible.builtin.copy:
         dest: /usr/share/nginx/html/index.html
-        owner: root
-        group: root
-        mode: '0644'
         content: |
           <!DOCTYPE html>
-          <html lang="en">
-          <head>
-              <meta charset="UTF-8">
-              <title>Nginx Server</title>
-              <style>
-                  body { font-family: Arial, sans-serif; margin: 40px; }
-                  h1 { color: #333; }
-                  p { color: #666; }
-              </style>
-          </head>
+          <html>
+          <head><title>Server Details</title></head>
           <body>
-              <h1>Nginx is Running ✅</h1>
-              <p><strong>Hostname:</strong> {{ ansible_hostname }}</p>
-              <p><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</p>
-              <p><strong>OS:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</p>
+          <h1>Served from {{ ansible_hostname }}</h1>
           </body>
           </html>
+        mode: '0644'
 
-    - name: "Task 5: Start and Enable Nginx"
+    - name: Ensure Nginx is running and enabled
       ansible.builtin.service:
         name: nginx
         state: started
         enabled: yes
-
-    - name: "Task 6: Verify Nginx is running"
-      ansible.builtin.command: systemctl status nginx
-      changed_when: false
