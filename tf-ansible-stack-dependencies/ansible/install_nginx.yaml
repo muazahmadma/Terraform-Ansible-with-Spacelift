@@ -2,16 +2,31 @@
 - name: Install and Configure Nginx
   hosts: all
   become: yes
+  gather_facts: yes
+
+  vars:
+    nginx_service_name: nginx
 
   tasks:
     - name: Install Nginx
       ansible.builtin.package:
         name: nginx
         state: present
+      when: not ansible_check_mode
 
     - name: Set nginx web root
-      set_fact:
-        nginx_web_root: "{{ '/usr/share/nginx/html' if ansible_os_family == 'RedHat' else '/var/www/html' }}"
+      ansible.builtin.set_fact:
+        nginx_web_root: >-
+          {{ '/usr/share/nginx/html'
+             if ansible_facts['os_family'] == 'RedHat'
+             else '/var/www/html' }}
+
+    - name: Ensure web root exists
+      ansible.builtin.file:
+        path: "{{ nginx_web_root }}"
+        state: directory
+        mode: '0755'
+      when: not ansible_check_mode
 
     - name: Create index.html
       ansible.builtin.copy:
@@ -19,20 +34,36 @@
         content: |
           <!DOCTYPE html>
           <html>
-          <head><title>Server Details</title></head>
+          <head>
+            <title>Nginx Test</title>
+          </head>
           <body>
-          <h1>Served from {{ ansible_hostname }}</h1>
+            <h1>Served from {{ ansible_facts['hostname'] }}</h1>
           </body>
           </html>
         mode: '0644'
+      notify: Restart nginx
 
-    - name: Reload systemd
-      ansible.builtin.command: systemctl daemon-reexec
-      changed_when: false
+    - name: Ensure nginx service exists (runtime check)
+      ansible.builtin.stat:
+        path: /usr/lib/systemd/system/nginx.service
+      register: nginx_unit
+      when: not ansible_check_mode
 
-    - name: Ensure Nginx is running and enabled
+    - name: Enable and start nginx
       ansible.builtin.service:
-        name: nginx
+        name: "{{ nginx_service_name }}"
         state: started
         enabled: true
+      when:
+        - not ansible_check_mode
+        - nginx_unit.stat.exists
+
+  handlers:
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: "{{ nginx_service_name }}"
+        state: restarted
+      when: not ansible_check_mode
+
 
