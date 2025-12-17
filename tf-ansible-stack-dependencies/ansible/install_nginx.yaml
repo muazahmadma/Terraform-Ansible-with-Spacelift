@@ -5,57 +5,56 @@
   gather_facts: no
 
   tasks:
-    - name: Update apt cache
-      ansible.builtin.apt:
-        update_cache: yes
-        cache_valid_time: 3600
-      retries: 3
-      delay: 5
+    - name: "Task 1: Update system and install Python 3.10"
+      ansible.builtin.raw: |
+        set -e
+        apt-get update -qq
+        apt-get install -y -qq python3.10 python3.10-distutils python3-apt
+        update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1
+      args:
+        executable: /bin/bash
 
-    - name: Install Python 3.9
-      ansible.builtin.apt:
-        name:
-          - python3.9
-          - python3.9-distutils
-          - python3-apt
-        state: present
-      retries: 3
-      delay: 5
-
-    - name: Gather facts with Python 3.9
+    - name: "Task 2: Gather facts"
       ansible.builtin.setup:
-        filter: "ansible_*"
-      vars:
-        ansible_python_interpreter: /usr/bin/python3.9
 
-    - name: Install Nginx
+    - name: "Task 3: Install Nginx"
       ansible.builtin.apt:
         name: nginx
-        state: latest
+        state: present
         update_cache: yes
-      vars:
-        ansible_python_interpreter: /usr/bin/python3.9
 
-    - name: Create index.html
+    - name: "Task 4: Create Nginx index.html"
       ansible.builtin.copy:
         dest: /usr/share/nginx/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
         content: |
           <!DOCTYPE html>
-          <html>
-          <head><title>Server Details</title></head>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <title>Nginx Server</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; }
+                  h1 { color: #333; }
+                  p { color: #666; }
+              </style>
+          </head>
           <body>
-          <h1>Served from {{ ansible_hostname }}</h1>
-          <p>IP: {{ ansible_default_ipv4['address'] }}</p>
+              <h1>Nginx is Running ✅</h1>
+              <p><strong>Hostname:</strong> {{ ansible_hostname }}</p>
+              <p><strong>IP Address:</strong> {{ ansible_default_ipv4.address }}</p>
+              <p><strong>OS:</strong> {{ ansible_distribution }} {{ ansible_distribution_version }}</p>
           </body>
           </html>
-        mode: '0644'
-      vars:
-        ansible_python_interpreter: /usr/bin/python3.9
 
-    - name: Ensure Nginx is running and enabled
+    - name: "Task 5: Start and Enable Nginx"
       ansible.builtin.service:
         name: nginx
         state: started
         enabled: yes
-      vars:
-        ansible_python_interpreter: /usr/bin/python3.9
+
+    - name: "Task 6: Verify Nginx is running"
+      ansible.builtin.command: systemctl status nginx
+      changed_when: false
